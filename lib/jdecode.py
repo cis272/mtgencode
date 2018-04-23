@@ -15,8 +15,8 @@ def mtg_open_json(fname, verbose = False):
     for k_set in jobj:
         set = jobj[k_set]
         setname = set['name']
-        if 'magicCardsInfoCode' in set:
-            codename = set['magicCardsInfoCode']
+        if 'hearthstoneCardsInfoCode' in set:
+            codename = set['hearthstoneCardsInfoCode']
         else:
             codename = ''
         
@@ -66,22 +66,9 @@ def mtg_open_json(fname, verbose = False):
         print 'Opened ' + str(len(allcards)) + ' uniquely named cards.'
     return allcards
 
-# filters to ignore some undesirable cards, only used when opening json
-def default_exclude_sets(cardset):
-    return cardset == 'Unglued' or cardset == 'Unhinged' or cardset == 'Celebration'
-
-def default_exclude_types(cardtype):
-    return cardtype in ['conspiracy']
-
-def default_exclude_layouts(layout):
-    return layout in ['token', 'plane', 'scheme', 'phenomenon', 'vanguard']
-
 # centralized logic for opening files of cards, either encoded or json
 def mtg_open_file(fname, verbose = False,
-                  linetrans = True, fmt_ordered = cardlib.fmt_ordered_default,
-                  exclude_sets = default_exclude_sets,
-                  exclude_types = default_exclude_types,
-                  exclude_layouts = default_exclude_layouts):
+                  linetrans = True, fmt_ordered = cardlib.fmt_ordered_default):
 
     cards = []
     valid = 0
@@ -102,8 +89,7 @@ def mtg_open_file(fname, verbose = False,
                 idx = 0
                 card = cardlib.Card(jcards[idx], linetrans=linetrans)
                 while (idx < len(jcards)
-                       and (card.rarity == utils.rarity_special_marker
-                            or exclude_sets(jcards[idx][utils.json_field_set_name]))):
+                       and (card.rarity == utils.rarity_legendary_marker)):
                     idx += 1
                     if idx < len(jcards):
                         card = cardlib.Card(jcards[idx], linetrans=linetrans)
@@ -115,12 +101,6 @@ def mtg_open_file(fname, verbose = False,
                 # but eh
 
                 skip = False
-                if (exclude_sets(jcards[idx][utils.json_field_set_name])
-                    or exclude_layouts(jcards[idx]['layout'])):
-                    skip = True
-                for cardtype in card.types:
-                    if exclude_types(cardtype):
-                        skip = True
                 if skip:
                     skipped += 1
                     continue
@@ -162,9 +142,9 @@ def mtg_open_file(fname, verbose = False,
     good_count = 0
     bad_count = 0
     for card in cards:
-        if not card.parsed and not card.text.text:
+        if not card.parsed:
             bad_count += 1
-        elif len(card.name) > 50 or len(card.rarity) > 3:
+        elif len(card.name) > 50 or len(card.rarity) > 6:
             bad_count += 1
         else:
             good_count += 1

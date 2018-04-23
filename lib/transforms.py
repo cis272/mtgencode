@@ -394,35 +394,6 @@ def text_pass_7_choice(s):
 # might as well do this after countertype because we probably care more about
 # the location of the equip cost
 def text_pass_8_equip(s):
-    equips = re.findall(r'equip ' + utils.mana_json_regex + r'.?$', s)
-    # there don't seem to be any cases with more than one
-    if len(equips) == 1:
-        equip = equips[0]
-        s = s.replace('\n' + equip, '')
-        s = s.replace(equip, '')
-
-        if equip[-1:] == ' ':
-            equip = equip[0:-1]
-
-        if s == '':
-            s = equip
-        else:
-            s = equip + '\n' + s
-
-    nonmana = re.findall(ur'(equip\u2014.*(\n|$))', s)
-    if len(nonmana) == 1:
-        equip = nonmana[0][0]
-        s = s.replace('\n' + equip, '')
-        s = s.replace(equip, '')
-        
-        if equip[-1:] == ' ':
-            equip = equip[0:-1]
-
-        if s == '':
-            s = equip
-        else:
-            s = equip + '\n' + s
-        
     return s
 
 
@@ -431,7 +402,7 @@ def text_pass_9_newlines(s):
 
 
 def text_pass_10_symbols(s):
-    return utils.to_symbols(s)
+    return s
 
 
 # reorder the lines of text into a canonical form:

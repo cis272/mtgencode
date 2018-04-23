@@ -57,11 +57,9 @@ except ImportError:
 field_name = 'name'
 field_rarity = 'rarity'
 field_cost = 'cost'
-field_supertypes = 'supertypes'
-field_types = 'types'
-field_subtypes = 'subtypes'
-field_loyalty = 'loyalty'
-field_pt = 'pt'
+field_cardClass = 'cardClass'
+field_type = 'type'
+field_ah = 'ah'
 field_text = 'text'
 field_other = 'other' # it's kind of a pseudo-field
 
@@ -69,55 +67,45 @@ field_other = 'other' # it's kind of a pseudo-field
 field_label_name = utils.field_label_name
 field_label_rarity = utils.field_label_rarity
 field_label_cost = utils.field_label_cost
-field_label_supertypes = utils.field_label_supertypes
-field_label_types = utils.field_label_types
-field_label_subtypes = utils.field_label_subtypes
-field_label_loyalty = utils.field_label_loyalty
-field_label_pt = utils.field_label_pt
+field_label_cardClass = utils.field_label_cardClass
+field_label_type = utils.field_label_type
+field_label_ah = utils.field_label_ah
 field_label_text = utils.field_label_text
 
 fieldnames = [
     field_name,
     field_rarity,
     field_cost,
-    field_supertypes,
-    field_types,
-    field_subtypes,
-    field_loyalty,
-    field_pt,
+    field_cardClass,
+    field_type,
+    field_ah,
     field_text,
 ]
 
 # legacy
 fmt_ordered_old = [
     field_name,
-    field_supertypes,
-    field_types,
-    field_loyalty,
-    field_subtypes,
+    field_cardClass,
+    field_type,
     field_rarity,
-    field_pt,
+    field_ah,
     field_cost,
     field_text,
 ]
 fmt_ordered_norarity = [
     field_name,
-    field_supertypes,
-    field_types,
-    field_loyalty,
-    field_subtypes,
-    field_pt,
+    field_cardClass,
+    field_type,
+    field_ah,
     field_cost,
     field_text,
 ]
 
 # standard
 fmt_ordered_default = [
-    field_types,
-    field_supertypes,
-    field_subtypes,
-    field_loyalty,
-    field_pt,
+    field_type,
+    field_cardClass,
+    field_ah,
     field_text,
     field_cost,
     field_rarity,
@@ -126,22 +114,18 @@ fmt_ordered_default = [
 
 # minor variations
 fmt_ordered_noname = [
-    field_types,
-    field_supertypes,
-    field_subtypes,
-    field_loyalty,
-    field_pt,
+    field_type,
+    field_cardClass,
+    field_ah,
     field_text,
     field_cost,
     field_rarity,
 ]
 fmt_ordered_named = [
     field_name,
-    field_types,
-    field_supertypes,
-    field_subtypes,
-    field_loyalty,
-    field_pt,
+    field_type,
+    field_cardClass,
+    field_ah,
     field_text,
     field_cost,
     field_rarity,
@@ -151,11 +135,9 @@ fmt_labeled_default = {
     field_name : field_label_name,
     field_rarity : field_label_rarity,
     field_cost : field_label_cost,
-    field_supertypes : field_label_supertypes,
-    field_types : field_label_types,
-    field_subtypes : field_label_subtypes,
-    field_loyalty : field_label_loyalty,
-    field_pt : field_label_pt,
+    field_cardClass : field_label_cardClass,
+    field_type : field_label_type,
+    field_ah : field_label_ah,
     field_text : field_label_text,
 }
 
@@ -164,21 +146,17 @@ def fields_check_valid(fields):
     # all cards must have a name and a type
     if not field_name in fields:
         return False
-    if not field_types in fields:
+    if not field_type in fields:
         return False
-    # creatures and vehicles have p/t, other things don't
-    iscreature = False
-    for idx, value in fields[field_types]:
-        if 'creature' in value:
-            iscreature = True
-        elif field_subtypes in fields:
-	    for idx, value in fields[field_subtypes]:
-	        if 'vehicle' in value:
-		    iscreature = True
-    if iscreature:
-        return field_pt in fields
+    # minions have a/h, other things don't
+    isMinion = False
+    for idx, value in fields[field_type]:
+        if 'MINION' in value:
+            isMinion = True
+    if isMinion:
+        return field_ah in fields
     else:
-        return not field_pt in fields
+        return not field_ah in fields
 
 
 # These functions take a bunch of source data in some format and turn
@@ -192,40 +170,18 @@ def fields_check_valid(fields):
 # of a triple that reports parsing success and valid success as its 
 # first two elements.
 
-# This whole things assumes the json format of mtgjson.com.
-
 # Here's a brief list of relevant fields:
 # name - string
-# names - list (used for split, flip, and double-faced)
-# manaCost - string
-# cmc - number
-# colors - list
-# type - string (the whole big long damn thing)
-# supertypes - list
+# type - string
+# cost - string
+# cardClass - list
 # types - list
-# subtypes - list
 # text - string
-# power - string
-# toughness - string
-# loyalty - number
-
-# And some less useful ones, in case they're wanted for something:
-# layout - string
+# attack - string
+# health - string
 # rarity - string
 # flavor - string
 # artist - string
-# number - string
-# multiverseid - number
-# variations - list
-# imageName - string
-# watermark - string
-# border - string
-# timeshifted - boolean
-# hand - number
-# life - number
-# reserved - boolean
-# releaseDate - string
-# starter - boolean
 
 def fields_from_json(src_json, linetrans = True):
     parsed = True
@@ -240,33 +196,22 @@ def fields_from_json(src_json, linetrans = True):
         name_val = utils.to_ascii(name_val)
         fields[field_name] = [(-1, name_val)]
     else:
-        name_orig = ''
-        parsed = False
+		name_orig = ''
+		parsed = False
 
-    # return the actual Manacost object
-    if 'manaCost' in src_json:
-        cost =  Manacost(src_json['manaCost'], fmt = 'json')
-        valid = valid and cost.valid
-        parsed = parsed and cost.parsed
-        fields[field_cost] = [(-1, cost)]
+    if 'cost' in src_json:
+        cost_val = str(src_json['cost'])
+        fields[field_cost] = [(-1, cost_val)]
 
-    if 'supertypes' in src_json:
-        fields[field_supertypes] = [(-1, map(lambda s: utils.to_ascii(s.lower()), 
-                                             src_json['supertypes']))]
+    if 'cardClass' in src_json:
+        fields[field_cardClass] = [(-1, src_json['cardClass'])]
 
-    if 'types' in src_json:
-        fields[field_types] = [(-1, map(lambda s: utils.to_ascii(s.lower()), 
-                                        src_json['types']))]
+    if 'type' in src_json:
+        fields[field_type] = [(-1, src_json['type'])]
     else:
-        parsed = False
-
-    if 'subtypes' in src_json:
-        fields[field_subtypes] = [(-1, map(lambda s: utils.to_ascii(s.lower())
-                                           # urza's lands...
-                                           .replace('"', "'").replace('-', utils.dash_marker), 
-                                           src_json['subtypes']))]
-        
-
+		parsed = False	
+	
+    noRarity = 'N'
     if 'rarity' in src_json:
         if src_json['rarity'] in utils.json_rarity_map:
             fields[field_rarity] = [(-1, utils.json_rarity_map[src_json['rarity']])]
@@ -274,47 +219,26 @@ def fields_from_json(src_json, linetrans = True):
             fields[field_rarity] = [(-1, src_json['rarity'])]
             parsed = False
     else:
-        parsed = False
+		fields[field_rarity] = [(-1, noRarity)]
 
-    if 'loyalty' in src_json:
-        fields[field_loyalty] = [(-1, utils.to_unary(str(src_json['loyalty'])))]
-
-    p_t = ''
-    parsed_pt = True
-    if 'power' in src_json:
-        p_t = utils.to_ascii(utils.to_unary(src_json['power'])) + '/' # hardcoded
-        parsed_pt = False
-        if 'toughness' in src_json:
-            p_t = p_t + utils.to_ascii(utils.to_unary(src_json['toughness']))
-            parsed_pt = True
-    elif 'toughness' in src_json:
-        p_t = '/' + utils.to_ascii(utils.to_unary(src_json['toughness'])) # hardcoded
-        parsed_pt = False
-    if p_t:
-        fields[field_pt] = [(-1, p_t)]
-    parsed = parsed and parsed_pt
-        
-    # similarly, return the actual Manatext object
+    a_h = ''
+    parsed_ah = True
+    if 'attack' in src_json:
+        a_h = str(src_json['attack']) + '/' # hardcoded
+        parsed_ah = False
+        if 'health' in src_json:
+            a_h = a_h + str(src_json['health'])
+            parsed_ah = True
+    elif 'health' in src_json:
+        a_h = '/' + str(src_json['health']) # hardcoded
+        parsed_ah = False
+    if a_h:
+        fields[field_ah] = [(-1, a_h)]
+    parsed = parsed and parsed_ah
+		
     if 'text' in src_json:
-        text_val = src_json['text'].lower()
-        text_val = transforms.text_pass_1_strip_rt(text_val)
-        text_val = transforms.text_pass_2_cardname(text_val, name_orig)
-        text_val = transforms.text_pass_3_unary(text_val)
-        text_val = transforms.text_pass_4a_dashes(text_val)
-        text_val = transforms.text_pass_4b_x(text_val)
-        text_val = transforms.text_pass_5_counters(text_val)
-        text_val = transforms.text_pass_6_uncast(text_val)
-        text_val = transforms.text_pass_7_choice(text_val)
-        text_val = transforms.text_pass_8_equip(text_val)
-        text_val = transforms.text_pass_9_newlines(text_val)
-        text_val = transforms.text_pass_10_symbols(text_val)
-        if linetrans:
-            text_val = transforms.text_pass_11_linetrans(text_val)
-        text_val = utils.to_ascii(text_val)
-        text_val = text_val.strip()
-        mtext = Manatext(text_val, fmt = 'json')
-        valid = valid and mtext.valid
-        fields[field_text] = [(-1, mtext)]
+		text_val = utils.to_ascii(src_json['text'])
+		fields[field_text] = [(-1, text_val)]
     
     # we don't need to worry about bsides because we handle that in the constructor
     return parsed, valid and fields_check_valid(fields), fields
@@ -370,21 +294,6 @@ def fields_from_format(src_text, fmt_ordered, fmt_labeled, fieldsep):
             parsed = False
             valid = False
 
-        # specialized handling
-        if fname in [field_cost]:
-            fval = Manacost(textfield)
-            parsed = parsed and fval.parsed
-            valid = valid and fval.valid
-            addf(fields, fname, (idx, fval))
-        elif fname in [field_text]:
-            fval = Manatext(textfield)
-            valid = valid and fval.valid
-            addf(fields, fname, (idx, fval))
-        elif fname in [field_supertypes, field_types, field_subtypes]:
-            addf(fields, fname, (idx, textfield.split()))
-        else:
-            addf(fields, fname, (idx, textfield))
-
         idx += 1
         true_idx += 1
         
@@ -412,18 +321,14 @@ class Card:
         # default values for all fields
         self.__dict__[field_name] = ''
         self.__dict__[field_rarity] = ''
-        self.__dict__[field_cost] = Manacost('')
-        self.__dict__[field_supertypes] = []
-        self.__dict__[field_types] = []
-        self.__dict__[field_subtypes] = []
-        self.__dict__[field_loyalty] = ''
-        self.__dict__[field_loyalty + '_value'] = None
-        self.__dict__[field_pt] = ''
-        self.__dict__[field_pt + '_p'] = None
-        self.__dict__[field_pt + '_p_value'] = None
-        self.__dict__[field_pt + '_t'] = None
-        self.__dict__[field_pt + '_t_value'] = None
-        self.__dict__[field_text] = Manatext('')
+        self.__dict__[field_cost] = ''
+        self.__dict__[field_cardClass] = []
+        self.__dict__[field_type] = []
+        self.__dict__[field_ah] = ''
+        self.__dict__[field_ah + '_a'] = None
+        self.__dict__[field_ah + '_a_value'] = None
+        self.__dict__[field_ah + '_h'] = None
+        self.__dict__[field_ah + '_h_value'] = None
         self.__dict__[field_text + '_lines'] = []
         self.__dict__[field_text + '_words'] = []
         self.__dict__[field_text + '_lines_words'] = []
@@ -500,44 +405,29 @@ class Card:
                 self.valid = False
                 self.__dict__[field_other] += [(idx, '<' + field + '> ' + str(value))]
 
-    def _set_loyalty(self, values):
+    def _set_ah(self, values):
         first = True
         for idx, value in values:
             if first:
                 first = False
-                self.__dict__[field_loyalty] = value
-                try:
-                    self.__dict__[field_loyalty + '_value'] = int(value)
-                except ValueError:
-                    self.__dict__[field_loyalty + '_value'] = None
-                    # Technically '*' could still be valid, but it's unlikely...
-            else:
-                self.valid = False
-                self.__dict__[field_other] += [(idx, '<loyalty> ' + str(value))]
-
-    def _set_pt(self, values):
-        first = True
-        for idx, value in values:
-            if first:
-                first = False
-                self.__dict__[field_pt] = value
-                p_t = value.split('/') # hardcoded
-                if len(p_t) == 2:
-                    self.__dict__[field_pt + '_p'] = p_t[0]
+                self.__dict__[field_ah] = value
+                a_h = value.split('/') # hardcoded
+                if len(a_h) == 2:
+                    self.__dict__[field_ah + '_a'] = a_h[0]
                     try:
-                        self.__dict__[field_pt + '_p_value'] = int(p_t[0])
+                        self.__dict__[field_ah + '_a_value'] = int(a_h[0])
                     except ValueError:
-                        self.__dict__[field_pt + '_p_value'] = None
-                    self.__dict__[field_pt + '_t'] = p_t[1]
+                        self.__dict__[field_ah + '_a_value'] = None
+                    self.__dict__[field_ah + '_h'] = a_h[1]
                     try:
-                        self.__dict__[field_pt + '_t_value'] = int(p_t[1])
+                        self.__dict__[field_ah + '_h_value'] = int(a_h[1])
                     except ValueError:
-                        self.__dict__[field_pt + '_t_value'] = None
+                        self.__dict__[field_ah + '_h_value'] = None
                 else:
                     self.valid = False
             else:
                 self.valid = False
-                self.__dict__[field_other] += [(idx, '<pt> ' + str(value))]
+                self.__dict__[field_other] += [(idx, '<ah> ' + str(value))]
     
     def _set_text(self, values):
         first = True
@@ -546,10 +436,8 @@ class Card:
                 first = False
                 mtext = value
                 self.__dict__[field_text] = mtext
-                fulltext = mtext.encode()
+                fulltext = mtext
                 if fulltext:
-                    self.__dict__[field_text + '_lines'] = map(Manatext, 
-                                                               fulltext.split(utils.newline))
                     self.__dict__[field_text + '_words'] = re.sub(utils.unletters_regex, 
                                                                   ' ', 
                                                                   fulltext).split()
@@ -581,10 +469,6 @@ class Card:
                     # specialized field handling for the ones that aren't strings (sigh)
                     if isinstance(outfield, list):
                         outfield_str = ' '.join(outfield)
-                    elif isinstance(outfield, Manacost):
-                        outfield_str = outfield.encode(randomize = randomize_mana)
-                    elif isinstance(outfield, Manatext):
-                        outfield_str = outfield.encode(randomize = randomize_mana)
                         if randomize_lines:
                             outfield_str = transforms.randomize_lines(outfield_str)
                     else:
@@ -596,9 +480,6 @@ class Card:
                         outfield_str = fmt_labeled[field] + outfield_str
 
                 outfields += [outfield_str]
-
-            else:
-                raise ValueError('unknown field for Card.encode(): ' + str(field))
 
         if randomize_fields:
             random.shuffle(outfields)
